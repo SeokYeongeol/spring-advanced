@@ -10,11 +10,14 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.example.expert.domain.common.exception.InvalidRequestException;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.UnsupportedEncodingException;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Slf4j
 @Aspect
@@ -22,23 +25,25 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class LogAspect {
 
-    private final HttpServletRequest request;
-    private final HttpServletResponse response;
-
     @Pointcut("execution(* org.example.expert.domain.user.controller.UserAdminController.*(..)) " +
             "|| execution(* org.example.expert.domain.comment.controller.CommentAdminController.*(..))")
     private void pointCut() { }
 
     @Around("pointCut()")
     public Object loggingAdminApi(ProceedingJoinPoint joinPoint) throws Throwable {
-        ContentCachingRequestWrapper cachingRequest = new ContentCachingRequestWrapper(request);
-        ContentCachingResponseWrapper cachingResponse = new ContentCachingResponseWrapper(response);
+        HttpServletRequest request = ((ServletRequestAttributes)
+                RequestContextHolder.getRequestAttributes()).getRequest();
+        HttpServletResponse response = ((ServletRequestAttributes)
+                RequestContextHolder.getRequestAttributes()).getResponse();
+
+        ContentCachingRequestWrapper cachingRequest = (ContentCachingRequestWrapper) request.getAttribute("cachingRequest");
+        ContentCachingResponseWrapper cachingResponse = (ContentCachingResponseWrapper) request.getAttribute("cachingResponse");
 
         Long userId = (Long) request.getAttribute("userId");
         LocalDateTime requestTime = LocalDateTime.now();
         String requestUrl = request.getRequestURI();
-        String requestBody = getCachedRequestBody(cachingRequest);
-        String responseBody = getCachedResponseBody(cachingResponse);
+        String requestBody = getCachedRequestBody(cachingRequest, request);
+        String responseBody = getCachedResponseBody(cachingResponse, response);
 
         log.info("\n[RequestLog]\n" +
                 "[userId] : {}\n" +
@@ -59,7 +64,10 @@ public class LogAspect {
         return result;
     }
 
-    private String getCachedRequestBody(ContentCachingRequestWrapper cachingRequest) {
+    private String getCachedRequestBody(
+            ContentCachingRequestWrapper cachingRequest,
+            HttpServletRequest request
+    ) {
         byte[] content = cachingRequest.getContentAsByteArray();
         if(content.length == 0) {
             return "{}";
@@ -71,7 +79,10 @@ public class LogAspect {
         }
     }
 
-    private String getCachedResponseBody(ContentCachingResponseWrapper cachingResponse) {
+    private String getCachedResponseBody(
+            ContentCachingResponseWrapper cachingResponse,
+            HttpServletResponse response
+    ) {
         byte[] content = cachingResponse.getContentAsByteArray();
         if(content.length == 0) {
             return "{}";
